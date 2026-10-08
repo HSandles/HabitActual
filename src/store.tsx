@@ -1,0 +1,85 @@
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { todayISO, type ISODate } from './dates';
+import type { AppState, Challenge } from './model';
+import { loadState, requestPersistence, saveState } from './storage';
+
+interface Store {
+  state: AppState;
+  today: ISODate;
+  update: (fn: (s: AppState) => AppState) => void;
+  saveChallenge: (ch: Challenge) => void;
+  deleteChallenge: (id: string) => void;
+  toggleTask: (challengeId: string, date: ISODate, taskId: string) => void;
+}
+
+const StoreContext = createContext<Store | null>(null);
+
+export function StoreProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<AppState | null>(null);
+  const [today, setToday] = useState(todayISO());
+  const loaded = useRef(false);
+
+  useEffect(() => {
+    loadState().then((s) => {
+      setState(s);
+      loaded.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (state && loaded.current) saveState(state);
+  }, [state]);
+
+  // Keep "today" right if the app is left open past midnight or resumed the next day.
+  useEffect(() => {
+    const tick = () => setToday(todayISO());
+    const timer = setInterval(tick, 60_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
+
+  const update = useCallback((fn: (s: AppState) => AppState) => setState((s) => (s ? fn(s) : s)), []);
+
+  const saveChallenge = useCallback((ch: Challenge) => {
+    update((s) => {
+      const exists = s.challenges.some((c) => c.id === ch.id);
+      return { ...s, challenges: exists ? s.challenges.map((c) => (c.id === ch.id ? ch : c)) : [...s.challenges, ch] };
+    });
+    requestPersistence();
+  }, [update]);
+
+  const deleteChallenge = useCallback((id: string) => {
+    update((s) => ({ ...s, challenges: s.challenges.filter((c) => c.id !== id) }));
+  }, [update]);
+
+  const toggleTask = useCallback((challengeId: string, date: ISODate, taskId: string) => {
+    update((s) => ({
+      ...s,
+      challenges: s.challenges.map((c) => {
+        if (c.id !== challengeId) return c;
+        const done = c.checks[date] ?? [];
+        const next = done.includes(taskId) ? done.filter((t) => t !== taskId) : [...done, taskId];
+        const checks = { ...c.checks };
+        if (next.length) checks[date] = next;
+        else delete checks[date];
+        return { ...c, checks };
+      }),
+    }));
+  }, [update]);
+
+  if (!state) return null;
+  return (
+    <StoreContext.Provider value={{ state, today, update, saveChallenge, deleteChallenge, toggleTask }}>
+      {children}
+    </StoreContext.Provider>
+  );
+}
+
+export function useStore(): Store {
+  const store = useContext(StoreContext);
+  if (!store) throw new Error('useStore must be used inside StoreProvider');
+  return store;
+}
