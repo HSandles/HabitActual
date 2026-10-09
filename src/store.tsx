@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { todayISO, type ISODate } from './dates';
 import type { AppState, Challenge } from './model';
 import { loadState, requestPersistence, saveState } from './storage';
+import { deleteChallengePhotos } from './photos';
 
 interface Store {
   state: AppState;
@@ -10,6 +11,7 @@ interface Store {
   saveChallenge: (ch: Challenge) => void;
   deleteChallenge: (id: string) => void;
   toggleTask: (challengeId: string, date: ISODate, taskId: string) => void;
+  setChecked: (challengeId: string, date: ISODate, taskId: string, checked: boolean) => void;
   setAmount: (challengeId: string, date: ISODate, taskId: string, amount: number) => void;
 }
 
@@ -54,15 +56,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteChallenge = useCallback((id: string) => {
     update((s) => ({ ...s, challenges: s.challenges.filter((c) => c.id !== id) }));
+    deleteChallengePhotos(id);
   }, [update]);
 
-  const toggleTask = useCallback((challengeId: string, date: ISODate, taskId: string) => {
+  const setChecked = useCallback((challengeId: string, date: ISODate, taskId: string, checked: boolean | 'toggle') => {
     update((s) => ({
       ...s,
       challenges: s.challenges.map((c) => {
         if (c.id !== challengeId) return c;
         const done = c.checks[date] ?? [];
-        const next = done.includes(taskId) ? done.filter((t) => t !== taskId) : [...done, taskId];
+        const on = checked === 'toggle' ? !done.includes(taskId) : checked;
+        const next = on ? [...new Set([...done, taskId])] : done.filter((t) => t !== taskId);
         const checks = { ...c.checks };
         if (next.length) checks[date] = next;
         else delete checks[date];
@@ -70,6 +74,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }),
     }));
   }, [update]);
+
+  const toggleTask = useCallback(
+    (challengeId: string, date: ISODate, taskId: string) => setChecked(challengeId, date, taskId, 'toggle'),
+    [setChecked],
+  );
 
   const setAmount = useCallback((challengeId: string, date: ISODate, taskId: string, amount: number) => {
     // Round away floating-point drift from repeated 0.25 steps.
@@ -91,7 +100,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   if (!state) return null;
   return (
-    <StoreContext.Provider value={{ state, today, update, saveChallenge, deleteChallenge, toggleTask, setAmount }}>
+    <StoreContext.Provider value={{ state, today, update, saveChallenge, deleteChallenge, toggleTask, setChecked, setAmount }}>
       {children}
     </StoreContext.Provider>
   );

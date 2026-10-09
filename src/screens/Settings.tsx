@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { exportBackup, parseBackup } from '../storage';
+import { exportPhotos, importPhotos } from '../photos';
 import { Header } from '../components';
 import { useStore } from '../store';
 
@@ -8,6 +9,17 @@ export function Settings() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState('');
   const [persisted, setPersisted] = useState<boolean | null>(null);
+  const [withPhotos, setWithPhotos] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const doExport = async () => {
+    setBusy(true);
+    try {
+      exportBackup(state, withPhotos ? await exportPhotos() : undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     navigator.storage?.persisted?.().then(setPersisted);
@@ -18,13 +30,19 @@ export function Settings() {
     e.target.value = '';
     if (!file) return;
     try {
-      const backup = parseBackup(await file.text());
-      const msg = `Replace your ${state.challenges.length} challenge(s) on this device with the ${backup.challenges.length} in this backup?`;
+      const { state: backup, photos } = parseBackup(await file.text());
+      const photoCount = photos ? Object.keys(photos).length : 0;
+      const msg = `Replace your ${state.challenges.length} challenge(s) on this device with the ${backup.challenges.length} in this backup?`
+        + (photoCount ? ` Your progress photos will also be replaced with the ${photoCount} in the backup.` : '');
       if (!confirm(msg)) return;
+      setBusy(true);
+      const restoredPhotos = photos ? await importPhotos(photos) : 0;
       update(() => backup);
-      setMessage(`Restored ${backup.challenges.length} challenge(s).`);
+      setMessage(`Restored ${backup.challenges.length} challenge(s)${restoredPhotos ? ` and ${restoredPhotos} photo(s)` : ''}.`);
     } catch (err) {
       setMessage(err instanceof SyntaxError ? "This file isn't a HabitActual backup." : (err as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -35,11 +53,18 @@ export function Settings() {
         <section className="card">
           <h3 className="section-title">Your data</h3>
           <p className="muted small">
-            Everything is stored only on this device. Nothing is sent anywhere. Export a backup now and then,
-            especially before changing phones or clearing your browser data.
+            Everything, including progress photos, is stored only on this device. Nothing is sent anywhere.
+            Export a backup now and then, especially before changing phones or clearing your browser data.
           </p>
-          <button className="btn block" onClick={() => exportBackup(state)}>Export backup</button>
-          <button className="btn block" onClick={() => fileInput.current?.click()}>Restore from backup…</button>
+          <label className="toggle">
+            <input type="checkbox" checked={withPhotos} onChange={(e) => setWithPhotos(e.target.checked)} />
+            <span>
+              <strong>Include progress photos</strong>
+              <span className="muted small">Makes the file much bigger, and anyone you share the file with can see the photos.</span>
+            </span>
+          </label>
+          <button className="btn block" onClick={doExport} disabled={busy}>Export backup</button>
+          <button className="btn block" onClick={() => fileInput.current?.click()} disabled={busy}>Restore from backup…</button>
           <input ref={fileInput} type="file" accept="application/json,.json" hidden onChange={importFile} />
           {message && <p className="small" role="status">{message}</p>}
           {persisted === false && (

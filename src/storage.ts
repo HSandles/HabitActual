@@ -18,12 +18,19 @@ export async function requestPersistence(): Promise<boolean> {
   return (await navigator.storage.persisted()) || navigator.storage.persist();
 }
 
-export function exportBackup(state: AppState): void {
-  const stamp = new Date().toISOString().slice(0, 10);
-  download(`habitactual-backup-${stamp}.json`, JSON.stringify(state, null, 2), 'application/json');
+export interface Backup {
+  state: AppState;
+  /** Only present when the user chose to include photos: key → JPEG data URL. */
+  photos?: Record<string, string>;
 }
 
-export function parseBackup(text: string): AppState {
+export function exportBackup(state: AppState, photos?: Record<string, string>): void {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const data = photos ? { ...state, photos } : state;
+  download(`habitactual-backup-${stamp}${photos ? '-with-photos' : ''}.json`, JSON.stringify(data, null, photos ? 0 : 2), 'application/json');
+}
+
+export function parseBackup(text: string): Backup {
   const data = JSON.parse(text);
   if (data?.version !== 1 || !Array.isArray(data.challenges)) {
     throw new Error("This file isn't a HabitActual backup.");
@@ -36,7 +43,8 @@ export function parseBackup(text: string): AppState {
     c.amounts ??= {};
     c.strict = !!c.strict;
   }
-  return data as AppState;
+  const { photos, ...state } = data;
+  return { state: state as AppState, photos: photos && typeof photos === 'object' ? photos : undefined };
 }
 
 export function download(filename: string, contents: string, type: string): void {

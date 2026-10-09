@@ -4,7 +4,7 @@ import { getProgress, hasProgress, isDayComplete, taskLabel, type Challenge, typ
 import { buildIcs, googleCalendarUrl } from '../calendar';
 import { download } from '../storage';
 import { navigate } from '../router';
-import { Header, Sheet, Stat, TaskList } from '../components';
+import { Header, PhotoGallery, Sheet, Stat, TaskList } from '../components';
 import { useStore } from '../store';
 
 export function ChallengeDetail({ id }: { id: string }) {
@@ -56,6 +56,8 @@ export function ChallengeDetail({ id }: { id: string }) {
             <span><i className="cell missed" /> Missed</span>
           </div>
         </section>
+
+        <PhotoGallery challenge={c} />
 
         <section className="card">
           <h3 className="section-title">Daily tasks</h3>

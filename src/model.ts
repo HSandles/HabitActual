@@ -8,6 +8,8 @@ export interface Task {
   unit?: string;
   /** Amount added per tap of +. */
   step?: number;
+  /** Done by taking a photo, which is stored on the device only (see photos.ts). */
+  photo?: boolean;
 }
 
 export interface Challenge {
@@ -60,7 +62,7 @@ export const TEMPLATES: Template[] = [
       'Workout 2 (45 min, outdoors)',
       { title: 'Drink 1 gallon of water', target: 3.8, unit: 'L', step: 0.25 },
       'Read 10 pages of non-fiction',
-      'Take a progress photo',
+      { title: 'Take a progress photo', photo: true },
     ],
   },
   {
@@ -85,6 +87,8 @@ export const TEMPLATES: Template[] = [
 ];
 
 export const isCounter = (t: Task): t is Task & { target: number } => typeof t.target === 'number' && t.target > 0;
+
+export const isPhoto = (t: Task) => !!t.photo && !isCounter(t);
 
 export function getAmount(ch: Challenge, date: ISODate, taskId: string): number {
   return ch.amounts?.[date]?.[taskId] ?? 0;

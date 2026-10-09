@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, diffDays } from './dates';
-import { doneCount, getProgress, hasProgress, isDayComplete, type Challenge } from './model';
+import { doneCount, getProgress, hasProgress, isDayComplete, isPhoto, type Challenge } from './model';
 
 const START = '2026-03-01';
 
@@ -141,5 +141,20 @@ describe('counter tasks', () => {
     const old = challenge({ completeDays: [0] });
     delete old.amounts;
     expect(isDayComplete(old, START)).toBe(true);
+  });
+});
+
+describe('photo tasks', () => {
+  const photo = { id: 'p', title: 'Photo', photo: true };
+
+  it('is done once a photo has been saved for the day', () => {
+    const ch: Challenge = { ...challenge(), tasks: [photo], checks: { [START]: ['p'] } };
+    expect(isPhoto(photo)).toBe(true);
+    expect(isDayComplete(ch, START)).toBe(true);
+    expect(isDayComplete(ch, addDays(START, 1))).toBe(false);
+  });
+
+  it('a counter target wins over a stray photo flag', () => {
+    expect(isPhoto({ id: 'x', title: 'X', photo: true, target: 5 })).toBe(false);
   });
 });
