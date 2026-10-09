@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { addDays, diffDays, formatDate, weekdayMon0, type ISODate } from '../dates';
-import { doneCount, getProgress, isDayComplete, type Challenge, type Progress } from '../model';
+import { getProgress, hasProgress, isDayComplete, taskLabel, type Challenge, type Progress } from '../model';
 import { buildIcs, googleCalendarUrl } from '../calendar';
 import { download } from '../storage';
 import { navigate } from '../router';
@@ -60,7 +60,7 @@ export function ChallengeDetail({ id }: { id: string }) {
         <section className="card">
           <h3 className="section-title">Daily tasks</h3>
           <ol className="plain-list">
-            {c.tasks.map((t) => <li key={t.id}>{t.title}</li>)}
+            {c.tasks.map((t) => <li key={t.id}>{taskLabel(t)}</li>)}
           </ol>
         </section>
 
@@ -109,7 +109,7 @@ function HistoryGrid({ challenge: c, progress: p, today, onPick }: {
           if (!inRange) return <span key={d} className="cell blank" />;
           const state = future ? 'future'
             : isDayComplete(c, d) ? 'complete'
-            : doneCount(c, d) > 0 ? 'partial'
+            : hasProgress(c, d) ? 'partial'
             : d === today ? 'pending' : 'missed';
           return (
             <button

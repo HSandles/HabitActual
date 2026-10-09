@@ -33,6 +33,7 @@ export function parseBackup(text: string): AppState {
       throw new Error('The backup file is damaged or incomplete.');
     }
     c.checks ??= {};
+    c.amounts ??= {};
     c.strict = !!c.strict;
   }
   return data as AppState;

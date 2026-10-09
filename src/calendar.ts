@@ -1,5 +1,5 @@
 import { diffDays, type ISODate } from './dates';
-import type { Challenge } from './model';
+import { taskLabel, type Challenge } from './model';
 
 // Daily reminders are added to the phone's own calendar, so no server is needed.
 
@@ -20,7 +20,7 @@ function plan(ch: Challenge, from: ISODate, endDate: ISODate | null, time: strin
   const count = endDate ? diffDays(from, endDate) + 1 : null;
   return {
     title: `HabitActual: ${ch.name}`,
-    details: `Today's tasks:\n${ch.tasks.map((t) => `- ${t.title}`).join('\n')}\n\nTick them off in HabitActual: ${location.origin}${location.pathname}`,
+    details: `Today's tasks:\n${ch.tasks.map((t) => `- ${taskLabel(t)}`).join('\n')}\n\nTick them off in HabitActual: ${location.origin}${location.pathname}`,
     start: stamp(h, m),
     end: stamp(Math.min(23, Math.floor(endMin / 60)), endMin >= 24 * 60 ? 59 : endMin % 60),
     rrule: count ? `RRULE:FREQ=DAILY;COUNT=${count}` : 'RRULE:FREQ=DAILY',

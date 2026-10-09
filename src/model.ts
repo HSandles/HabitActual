@@ -3,6 +3,11 @@ import { addDays, diffDays, type ISODate } from './dates';
 export interface Task {
   id: string;
   title: string;
+  /** Set for counter tasks (e.g. 3.8 L of water); the task is done once the amount reaches it. */
+  target?: number;
+  unit?: string;
+  /** Amount added per tap of +. */
+  step?: number;
 }
 
 export interface Challenge {
@@ -16,6 +21,8 @@ export interface Challenge {
   strict: boolean;
   /** Task ids ticked off on each date. */
   checks: Record<ISODate, string[]>;
+  /** Amounts logged for counter tasks, by date then task id. */
+  amounts?: Record<ISODate, Record<string, number>>;
   createdAt: string;
 }
 
@@ -37,7 +44,7 @@ export interface Template {
   name: string;
   description: string;
   durationDays: number | null;
-  tasks: string[];
+  tasks: (string | Omit<Task, 'id'>)[];
 }
 
 export const TEMPLATES: Template[] = [
@@ -51,7 +58,7 @@ export const TEMPLATES: Template[] = [
       'No alcohol',
       'Workout 1 (45 min)',
       'Workout 2 (45 min, outdoors)',
-      'Drink 1 gallon (3.8 L) of water',
+      { title: 'Drink 1 gallon of water', target: 3.8, unit: 'L', step: 0.25 },
       'Read 10 pages of non-fiction',
       'Take a progress photo',
     ],
@@ -64,7 +71,7 @@ export const TEMPLATES: Template[] = [
     tasks: [
       'Eat well, only drink socially',
       'Workout 45 min (one active recovery day a week)',
-      'Drink 3 L of water',
+      { title: 'Drink water', target: 3, unit: 'L', step: 0.25 },
       'Read 10 pages',
     ],
   },
@@ -77,15 +84,38 @@ export const TEMPLATES: Template[] = [
   },
 ];
 
+export const isCounter = (t: Task): t is Task & { target: number } => typeof t.target === 'number' && t.target > 0;
+
+export function getAmount(ch: Challenge, date: ISODate, taskId: string): number {
+  return ch.amounts?.[date]?.[taskId] ?? 0;
+}
+
+export function isTaskDone(ch: Challenge, date: ISODate, t: Task): boolean {
+  return isCounter(t) ? getAmount(ch, date, t.id) >= t.target : (ch.checks[date] ?? []).includes(t.id);
+}
+
 export function isDayComplete(ch: Challenge, date: ISODate): boolean {
-  if (ch.tasks.length === 0) return false;
-  const done = ch.checks[date];
-  return !!done && ch.tasks.every((t) => done.includes(t.id));
+  return ch.tasks.length > 0 && ch.tasks.every((t) => isTaskDone(ch, date, t));
 }
 
 export function doneCount(ch: Challenge, date: ISODate): number {
-  const done = ch.checks[date] ?? [];
-  return ch.tasks.filter((t) => done.includes(t.id)).length;
+  return ch.tasks.filter((t) => isTaskDone(ch, date, t)).length;
+}
+
+/** True if anything at all was logged that day, including part of a counter. */
+export function hasProgress(ch: Challenge, date: ISODate): boolean {
+  return doneCount(ch, date) > 0 || ch.tasks.some((t) => isCounter(t) && getAmount(ch, date, t.id) > 0);
+}
+
+/** "3.8 L", "10,000 steps" */
+export function formatAmount(n: number, unit?: string): string {
+  const num = n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return unit ? `${num} ${unit}` : num;
+}
+
+/** Task title plus its target, for lists outside the checklist. */
+export function taskLabel(t: Task): string {
+  return isCounter(t) ? `${t.title} (${formatAmount(t.target, t.unit)})` : t.title;
 }
 
 export type Status = 'upcoming' | 'active' | 'completed' | 'ended';

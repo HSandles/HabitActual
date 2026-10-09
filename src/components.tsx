@@ -1,15 +1,16 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { ISODate } from './dates';
-import type { Challenge } from './model';
+import { formatAmount, getAmount, isCounter, isTaskDone, type Challenge, type Task } from './model';
 import { useStore } from './store';
 
 export function TaskList({ challenge, date }: { challenge: Challenge; date: ISODate }) {
   const { toggleTask } = useStore();
-  const done = challenge.checks[date] ?? [];
   return (
     <ul className="tasks">
       {challenge.tasks.map((t) => {
-        const checked = done.includes(t.id);
+        if (isCounter(t)) return <li key={t.id}><CounterTask challenge={challenge} date={date} task={t} /></li>;
+        const checked = isTaskDone(challenge, date, t);
         return (
           <li key={t.id}>
             <label className={checked ? 'task done' : 'task'}>
@@ -21,6 +22,60 @@ export function TaskList({ challenge, date }: { challenge: Challenge; date: ISOD
         );
       })}
     </ul>
+  );
+}
+
+function CounterTask({ challenge, date, task }: { challenge: Challenge; date: ISODate; task: Task & { target: number } }) {
+  const { setAmount } = useStore();
+  const [editing, setEditing] = useState(false);
+  const amount = getAmount(challenge, date, task.id);
+  const done = amount >= task.target;
+  const step = task.step && task.step > 0 ? task.step : 1;
+  const set = (n: number) => setAmount(challenge.id, date, task.id, n);
+  const pct = Math.min(100, (amount / task.target) * 100);
+
+  return (
+    <div className={done ? 'task counter done' : 'task counter'} style={{ '--fill': `${pct}%` } as CSSProperties}>
+      <button
+        className="box"
+        onClick={() => set(done ? 0 : task.target)}
+        aria-label={done ? `Reset ${task.title}` : `Mark ${task.title} as done`}
+      />
+      <button className="counter-body" onClick={() => setEditing(true)} aria-label={`Enter amount for ${task.title}`}>
+        <span className="task-title">{task.title}</span>
+        <span className="counter-value">
+          {formatAmount(amount)} / {formatAmount(task.target, task.unit)}
+        </span>
+      </button>
+      <button className="step-btn" onClick={() => set(amount - step)} disabled={amount <= 0} aria-label={`Subtract ${formatAmount(step, task.unit)}`}>−</button>
+      <button className="step-btn" onClick={() => set(amount + step)} aria-label={`Add ${formatAmount(step, task.unit)}`}>+</button>
+      {editing && <AmountSheet task={task} amount={amount} onSave={set} onClose={() => setEditing(false)} />}
+    </div>
+  );
+}
+
+function AmountSheet({ task, amount, onSave, onClose }: {
+  task: Task & { target: number }; amount: number; onSave: (n: number) => void; onClose: () => void;
+}) {
+  const [value, setValue] = useState(amount ? String(amount) : '');
+  const parsed = Number(value.replace(',', '.'));
+  const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0;
+  const save = (n: number) => {
+    onSave(n);
+    onClose();
+  };
+
+  return (
+    <Sheet title={task.title} onClose={onClose}>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); if (valid) save(parsed); }}>
+        <label className="field">
+          <span>Amount{task.unit ? ` (${task.unit})` : ''}, target {formatAmount(task.target, task.unit)}</span>
+          <input autoFocus inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="0" />
+        </label>
+        <button type="submit" className="btn block primary" disabled={!valid}>Save</button>
+        <button type="button" className="btn block" onClick={() => save(task.target)}>Hit target ({formatAmount(task.target, task.unit)})</button>
+      </form>
+    </Sheet>
   );
 }
 
@@ -44,7 +99,8 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
     };
   }, [onClose]);
 
-  return (
+  // Portal to <body> so a sheet opened from inside a task row doesn't inherit its styles.
+  return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
@@ -53,7 +109,8 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

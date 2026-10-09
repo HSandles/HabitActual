@@ -10,6 +10,7 @@ interface Store {
   saveChallenge: (ch: Challenge) => void;
   deleteChallenge: (id: string) => void;
   toggleTask: (challengeId: string, date: ISODate, taskId: string) => void;
+  setAmount: (challengeId: string, date: ISODate, taskId: string, amount: number) => void;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -70,9 +71,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }));
   }, [update]);
 
+  const setAmount = useCallback((challengeId: string, date: ISODate, taskId: string, amount: number) => {
+    // Round away floating-point drift from repeated 0.25 steps.
+    const value = Math.max(0, Math.round(amount * 1000) / 1000);
+    update((s) => ({
+      ...s,
+      challenges: s.challenges.map((c) => {
+        if (c.id !== challengeId) return c;
+        const day = { ...c.amounts?.[date] };
+        if (value) day[taskId] = value;
+        else delete day[taskId];
+        const amounts = { ...c.amounts };
+        if (Object.keys(day).length) amounts[date] = day;
+        else delete amounts[date];
+        return { ...c, amounts };
+      }),
+    }));
+  }, [update]);
+
   if (!state) return null;
   return (
-    <StoreContext.Provider value={{ state, today, update, saveChallenge, deleteChallenge, toggleTask }}>
+    <StoreContext.Provider value={{ state, today, update, saveChallenge, deleteChallenge, toggleTask, setAmount }}>
       {children}
     </StoreContext.Provider>
   );

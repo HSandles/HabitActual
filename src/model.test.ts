@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, diffDays } from './dates';
-import { getProgress, type Challenge } from './model';
+import { doneCount, getProgress, hasProgress, isDayComplete, type Challenge } from './model';
 
 const START = '2026-03-01';
 
@@ -109,5 +109,37 @@ describe('getProgress', () => {
     expect(p.status).toBe('active');
     expect(p.dayNumber).toBe(401);
     expect(p.endDate).toBeNull();
+  });
+});
+
+describe('counter tasks', () => {
+  const water = { id: 'w', title: 'Water', target: 3.8, unit: 'L', step: 0.25 };
+  const ch = (amount: number | undefined, ticked: string[] = ['a']): Challenge => ({
+    ...challenge(),
+    tasks: [{ id: 'a', title: 'A' }, water],
+    checks: { [START]: ticked },
+    amounts: amount === undefined ? {} : { [START]: { w: amount } },
+  });
+
+  it('is done once the amount reaches the target', () => {
+    expect(isDayComplete(ch(3.8), START)).toBe(true);
+    expect(isDayComplete(ch(5), START)).toBe(true);
+    expect(isDayComplete(ch(3.75), START)).toBe(false);
+    expect(doneCount(ch(3.75), START)).toBe(1);
+  });
+
+  it('ignores a stray tick on a counter task', () => {
+    expect(isDayComplete(ch(undefined, ['a', 'w']), START)).toBe(false);
+  });
+
+  it('counts a part-filled counter as progress for the day', () => {
+    expect(hasProgress(ch(1, []), START)).toBe(true);
+    expect(hasProgress(ch(undefined, []), START)).toBe(false);
+  });
+
+  it('works for challenges saved before counters existed', () => {
+    const old = challenge({ completeDays: [0] });
+    delete old.amounts;
+    expect(isDayComplete(old, START)).toBe(true);
   });
 });

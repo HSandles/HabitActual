@@ -163,6 +163,48 @@ p { margin: 0; }
 .task.done .box::after { content: '✓'; color: var(--accent-text); font-weight: 800; font-size: 15px; }
 .task.done .task-title { color: var(--muted); text-decoration: line-through; }
 .task input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Counter tasks: the row background fills up towards the target */
+.task.counter {
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  cursor: default;
+  background: linear-gradient(to right, var(--accent-soft) var(--fill), var(--surface-2) var(--fill));
+}
+.task.counter .box { background: none; padding: 0; cursor: pointer; }
+.task.done.counter .box { background: var(--accent); }
+.counter-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.counter-value { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.task.done.counter .task-title { text-decoration: none; }
+.task.done .counter-value { color: var(--accent); font-weight: 600; }
+.step-btn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.step-btn:disabled { opacity: 0.4; }
+.step-btn:active { filter: brightness(0.9); }
+
 .done-msg { color: var(--accent); font-weight: 600; text-align: center; }
 .notice { background: var(--surface-2); border-left: 3px solid var(--partial); padding: 8px 12px; border-radius: 6px; font-size: 0.875rem; }
 
@@ -276,7 +318,13 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 input:disabled { opacity: 0.5; }
 .row { display: flex; gap: 12px; }
 .grow { flex: 1; }
-.task-edit { display: flex; gap: 4px; align-items: center; }
+.task-edit { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.task-edit-row { display: flex; gap: 4px; align-items: center; }
+.segmented { display: inline-flex; align-self: flex-start; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.segmented button { min-height: 34px; padding: 0 14px; border: none; background: var(--surface); color: var(--muted); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.segmented button.on { background: var(--accent-soft); color: var(--accent); }
+.counter-fields { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
+.counter-fields .field > span { font-size: 0.8rem; margin-bottom: 0; }
 .templates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .template {
   display: flex;

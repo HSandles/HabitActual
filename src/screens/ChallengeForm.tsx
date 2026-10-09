@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { newId, TEMPLATES, type Challenge, type Task, type Template } from '../model';
+import { isCounter, newId, TEMPLATES, type Challenge, type Task, type Template } from '../model';
 import { navigate } from '../router';
 import { Header } from '../components';
 import { useStore } from '../store';
@@ -10,7 +10,7 @@ export function ChallengeForm({ id }: { id?: string }) {
 
   const [template, setTemplate] = useState<string>(existing ? '' : TEMPLATES[0].key);
   const [name, setName] = useState(existing?.name ?? TEMPLATES[0].name);
-  const [tasks, setTasks] = useState<Task[]>(existing?.tasks ?? toTasks(TEMPLATES[0]));
+  const [tasks, setTasks] = useState<DraftTask[]>((existing?.tasks ?? toTasks(TEMPLATES[0])).map(toDraft));
   const [ongoing, setOngoing] = useState(existing ? existing.durationDays === null : false);
   const [duration, setDuration] = useState(String(existing?.durationDays ?? TEMPLATES[0].durationDays ?? 30));
   const [startDate, setStartDate] = useState(existing?.startDate ?? today);
@@ -29,20 +29,23 @@ export function ChallengeForm({ id }: { id?: string }) {
   const pickTemplate = (t: Template) => {
     setTemplate(t.key);
     setName(t.key === 'custom' ? '' : t.name);
-    setTasks(t.tasks.length ? toTasks(t) : [{ id: newId(), title: '' }]);
+    setTasks(t.tasks.length ? toTasks(t).map(toDraft) : [blankDraft()]);
     setOngoing(t.durationDays === null);
     setDuration(String(t.durationDays ?? 30));
   };
 
-  const setTaskTitle = (taskId: string, title: string) =>
-    setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, title } : t)));
+  const patchTask = (taskId: string, patch: Partial<DraftTask>) =>
+    setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const cleanTasks = tasks.map((t) => ({ ...t, title: t.title.trim() })).filter((t) => t.title);
+    const named = tasks.filter((t) => t.title.trim());
     const days = Number(duration);
     if (!name.trim()) return setError('Give your challenge a name.');
-    if (!cleanTasks.length) return setError('Add at least one daily task.');
+    if (!named.length) return setError('Add at least one daily task.');
+    const badCounter = named.find((t) => t.counter && !(num(t.target) > 0));
+    if (badCounter) return setError(`Give "${badCounter.title.trim()}" a target above 0.`);
+    const cleanTasks = named.map(fromDraft);
     if (!ongoing && (!Number.isInteger(days) || days < 1 || days > 3650)) return setError('Length must be between 1 and 3650 days.');
     if (!startDate) return setError('Pick a start date.');
 
@@ -93,18 +96,42 @@ export function ChallengeForm({ id }: { id?: string }) {
             <legend>Daily tasks</legend>
             {tasks.map((t, i) => (
               <div key={t.id} className="task-edit">
-                <input
-                  value={t.title}
-                  onChange={(e) => setTaskTitle(t.id, e.target.value)}
-                  placeholder={`Task ${i + 1}`}
-                  aria-label={`Task ${i + 1}`}
-                  maxLength={80}
-                />
-                <button type="button" className="icon-btn" aria-label={`Remove task ${i + 1}`}
-                  onClick={() => setTasks((ts) => ts.filter((x) => x.id !== t.id))}>✕</button>
+                <div className="task-edit-row">
+                  <input
+                    value={t.title}
+                    onChange={(e) => patchTask(t.id, { title: e.target.value })}
+                    placeholder={`Task ${i + 1}`}
+                    aria-label={`Task ${i + 1}`}
+                    maxLength={80}
+                  />
+                  <button type="button" className="icon-btn" aria-label={`Remove task ${i + 1}`}
+                    onClick={() => setTasks((ts) => ts.filter((x) => x.id !== t.id))}>✕</button>
+                </div>
+                <div className="segmented" role="radiogroup" aria-label={`Task ${i + 1} type`}>
+                  <button type="button" role="radio" aria-checked={!t.counter} className={!t.counter ? 'on' : ''}
+                    onClick={() => patchTask(t.id, { counter: false })}>✓ Tick</button>
+                  <button type="button" role="radio" aria-checked={t.counter} className={t.counter ? 'on' : ''}
+                    onClick={() => patchTask(t.id, { counter: true })}># Counter</button>
+                </div>
+                {t.counter && (
+                  <div className="counter-fields">
+                    <label className="field">
+                      <span>Target</span>
+                      <input inputMode="decimal" value={t.target} placeholder="10000" onChange={(e) => patchTask(t.id, { target: e.target.value })} />
+                    </label>
+                    <label className="field">
+                      <span>Unit</span>
+                      <input value={t.unit} placeholder="steps" maxLength={12} onChange={(e) => patchTask(t.id, { unit: e.target.value })} />
+                    </label>
+                    <label className="field">
+                      <span>+ adds</span>
+                      <input inputMode="decimal" value={t.step} placeholder="1" onChange={(e) => patchTask(t.id, { step: e.target.value })} />
+                    </label>
+                  </div>
+                )}
               </div>
             ))}
-            <button type="button" className="btn small" onClick={() => setTasks((ts) => [...ts, { id: newId(), title: '' }])}>
+            <button type="button" className="btn small" onClick={() => setTasks((ts) => [...ts, blankDraft()])}>
               + Add task
             </button>
           </fieldset>
@@ -148,4 +175,37 @@ export function ChallengeForm({ id }: { id?: string }) {
   );
 }
 
-const toTasks = (t: Template): Task[] => t.tasks.map((title) => ({ id: newId(), title }));
+const toTasks = (t: Template): Task[] =>
+  t.tasks.map((task) => (typeof task === 'string' ? { id: newId(), title: task } : { id: newId(), ...task }));
+
+/** Task as edited in the form: number fields stay strings so they can be cleared while typing. */
+interface DraftTask {
+  id: string;
+  title: string;
+  counter: boolean;
+  target: string;
+  unit: string;
+  step: string;
+}
+
+const blankDraft = (): DraftTask => ({ id: newId(), title: '', counter: false, target: '', unit: '', step: '' });
+
+const toDraft = (t: Task): DraftTask => ({
+  id: t.id,
+  title: t.title,
+  counter: isCounter(t),
+  target: t.target ? String(t.target) : '',
+  unit: t.unit ?? '',
+  step: t.step ? String(t.step) : '',
+});
+
+const num = (s: string) => Number(s.replace(',', '.'));
+
+function fromDraft(d: DraftTask): Task {
+  const task: Task = { id: d.id, title: d.title.trim() };
+  if (!d.counter) return task;
+  task.target = num(d.target);
+  if (d.unit.trim()) task.unit = d.unit.trim();
+  if (num(d.step) > 0) task.step = num(d.step);
+  return task;
+}
