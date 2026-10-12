@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { addDays, diffDays, formatDate, weekdayMon0, type ISODate } from '../dates';
-import { getProgress, hasProgress, isDayComplete, taskLabel, type Challenge, type Progress } from '../model';
+import { getProgress, hasProgress, isDayComplete, isMeasure, taskLabel, type Challenge, type Progress } from '../model';
+import { MeasureCard } from '../measure';
 import { buildIcs, googleCalendarUrl } from '../calendar';
 import { download } from '../storage';
 import { navigate } from '../router';
@@ -56,6 +57,8 @@ export function ChallengeDetail({ id }: { id: string }) {
             <span><i className="cell missed" /> Missed</span>
           </div>
         </section>
+
+        {c.tasks.filter(isMeasure).map((t) => <MeasureCard key={t.id} challenge={c} task={t} />)}
 
         <PhotoGallery challenge={c} />
 

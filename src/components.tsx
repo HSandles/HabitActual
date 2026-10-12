@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { diffDays, formatDate, type ISODate } from './dates';
-import { formatAmount, getAmount, isCounter, isPhoto, isTaskDone, type Challenge, type Task } from './model';
+import { formatAmount, getAmount, isCounter, isMeasure, isPhoto, isTaskDone, type Challenge, type Task } from './model';
+import { MeasureTask } from './measure';
 import { deletePhoto, parsePhotoKey, photoKey, savePhoto, usePhotoKeys, usePhotoUrl } from './photos';
 import { requestPersistence } from './storage';
 import { useStore } from './store';
@@ -12,6 +13,7 @@ export function TaskList({ challenge, date }: { challenge: Challenge; date: ISOD
     <ul className="tasks">
       {challenge.tasks.map((t) => {
         if (isCounter(t)) return <li key={t.id}><CounterTask challenge={challenge} date={date} task={t} /></li>;
+        if (isMeasure(t)) return <li key={t.id}><MeasureTask challenge={challenge} date={date} task={t} /></li>;
         if (isPhoto(t)) return <li key={t.id}><PhotoTask challenge={challenge} date={date} task={t} /></li>;
         const checked = isTaskDone(challenge, date, t);
         return (

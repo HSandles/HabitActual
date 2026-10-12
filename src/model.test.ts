@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, diffDays } from './dates';
-import { doneCount, getProgress, hasProgress, isDayComplete, isPhoto, type Challenge } from './model';
+import {
+  doneCount, formatChange, getMeasurements, getProgress, hasProgress, isDayComplete, isMeasure, isPhoto, sharedDecimals, summariseMeasurements,
+  type Challenge,
+} from './model';
 
 const START = '2026-03-01';
 
@@ -156,5 +159,48 @@ describe('photo tasks', () => {
 
   it('a counter target wins over a stray photo flag', () => {
     expect(isPhoto({ id: 'x', title: 'X', photo: true, target: 5 })).toBe(false);
+  });
+});
+
+describe('measure tasks', () => {
+  const weigh = { id: 'w', title: 'Weigh in', unit: 'kg', measure: true };
+  const ch = (amounts: Challenge['amounts'], checks: Challenge['checks'] = {}): Challenge => ({
+    ...challenge(), tasks: [weigh], checks, amounts,
+  });
+
+  it('is done once a value is logged, with no target', () => {
+    const c = ch({ [START]: { w: 84.2 } });
+    expect(isMeasure(weigh)).toBe(true);
+    expect(isDayComplete(c, START)).toBe(true);
+    expect(isDayComplete(c, day(1))).toBe(false);
+  });
+
+  it('keeps days ticked before the task was switched from a tick-box', () => {
+    expect(isDayComplete(ch({}, { [START]: ['w'] }), START)).toBe(true);
+  });
+
+  it('summarises the change from first to latest entry', () => {
+    const c = ch({ [day(4)]: { w: 81.9 }, [START]: { w: 84.2 }, [day(2)]: { w: 84.6 }, [day(-3)]: { w: 90 } });
+    const points = getMeasurements(c, 'w');
+    expect(points.map((p) => p.value)).toEqual([84.2, 84.6, 81.9]); // sorted, and nothing from before the start
+    const s = summariseMeasurements(points)!;
+    expect(s.change).toBe(-2.3);
+    expect(s.changePct).toBeCloseTo(-2.73, 2);
+    expect([s.lowest, s.highest]).toEqual([81.9, 84.6]);
+    expect(formatChange(s.change, 'kg')).toBe('−2.3 kg');
+    expect(formatChange(0.5, 'kg')).toBe('+0.5 kg');
+  });
+
+  it('has no summary before anything is logged', () => {
+    expect(summariseMeasurements(getMeasurements(ch({}), 'w'))).toBeNull();
+  });
+});
+
+describe('sharedDecimals', () => {
+  it('finds the decimals needed to show a series consistently', () => {
+    expect(sharedDecimals([83, 82.9, 84.25])).toBe(2);
+    expect(sharedDecimals([83, 82.9])).toBe(1);
+    expect(sharedDecimals([83, 82])).toBe(0);
+    expect(sharedDecimals([])).toBe(0);
   });
 });

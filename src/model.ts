@@ -10,6 +10,8 @@ export interface Task {
   step?: number;
   /** Done by taking a photo, which is stored on the device only (see photos.ts). */
   photo?: boolean;
+  /** Done by logging a value for the day (e.g. a weigh-in); there is no target, the trend is the point. */
+  measure?: boolean;
 }
 
 export interface Challenge {
@@ -88,14 +90,68 @@ export const TEMPLATES: Template[] = [
 
 export const isCounter = (t: Task): t is Task & { target: number } => typeof t.target === 'number' && t.target > 0;
 
-export const isPhoto = (t: Task) => !!t.photo && !isCounter(t);
+export const isMeasure = (t: Task) => !!t.measure && !isCounter(t);
+
+export const isPhoto = (t: Task) => !!t.photo && !isCounter(t) && !isMeasure(t);
 
 export function getAmount(ch: Challenge, date: ISODate, taskId: string): number {
   return ch.amounts?.[date]?.[taskId] ?? 0;
 }
 
 export function isTaskDone(ch: Challenge, date: ISODate, t: Task): boolean {
-  return isCounter(t) ? getAmount(ch, date, t.id) >= t.target : (ch.checks[date] ?? []).includes(t.id);
+  if (isCounter(t)) return getAmount(ch, date, t.id) >= t.target;
+  const ticked = (ch.checks[date] ?? []).includes(t.id);
+  // A tick still counts for a measure task, so days ticked before it was switched from a tick-box stay complete.
+  return isMeasure(t) ? ticked || getAmount(ch, date, t.id) > 0 : ticked;
+}
+
+export interface Measurement {
+  date: ISODate;
+  value: number;
+}
+
+/** Values logged for a measure task since the challenge started, oldest first. */
+export function getMeasurements(ch: Challenge, taskId: string): Measurement[] {
+  return Object.entries(ch.amounts ?? {})
+    .filter(([date, day]) => day[taskId] > 0 && diffDays(ch.startDate, date) >= 0)
+    .map(([date, day]) => ({ date, value: day[taskId] }))
+    .sort((a, b) => diffDays(b.date, a.date));
+}
+
+export interface MeasureSummary {
+  first: Measurement;
+  latest: Measurement;
+  change: number;
+  /** Change as a percentage of the first value. */
+  changePct: number;
+  lowest: number;
+  highest: number;
+}
+
+export function summariseMeasurements(points: Measurement[]): MeasureSummary | null {
+  if (!points.length) return null;
+  const first = points[0];
+  const latest = points[points.length - 1];
+  const values = points.map((p) => p.value);
+  // Rounded so 81.9 - 84.2 reads as -2.3 rather than -2.3000000000000114.
+  const change = Math.round((latest.value - first.value) * 1000) / 1000;
+  return {
+    first, latest, change,
+    changePct: (change / first.value) * 100,
+    lowest: Math.min(...values),
+    highest: Math.max(...values),
+  };
+}
+
+/** "-2.3 kg", "+0.5 kg", "0 kg": a change always shows its direction. */
+export function formatChange(n: number, unit?: string, minDecimals = 0): string {
+  const sign = n > 0 ? '+' : n < 0 ? '−' : '';
+  return sign + formatAmount(Math.abs(n), unit, minDecimals);
+}
+
+/** Decimal places (up to 2) needed to show every value the same way, so 83 sits beside 82.9 as 83.0. */
+export function sharedDecimals(values: number[]): number {
+  return Math.max(0, ...values.map((v) => (String(Math.round(v * 100) / 100).split('.')[1] ?? '').length));
 }
 
 export function isDayComplete(ch: Challenge, date: ISODate): boolean {
@@ -112,8 +168,8 @@ export function hasProgress(ch: Challenge, date: ISODate): boolean {
 }
 
 /** "3.8 L", "10,000 steps" */
-export function formatAmount(n: number, unit?: string): string {
-  const num = n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+export function formatAmount(n: number, unit?: string, minDecimals = 0): string {
+  const num = n.toLocaleString(undefined, { minimumFractionDigits: minDecimals, maximumFractionDigits: Math.max(2, minDecimals) });
   return unit ? `${num} ${unit}` : num;
 }
 

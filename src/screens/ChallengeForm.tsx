@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { isCounter, isPhoto, newId, TEMPLATES, type Challenge, type Task, type Template } from '../model';
+import { isCounter, isMeasure, isPhoto, newId, TEMPLATES, type Challenge, type Task, type Template } from '../model';
 import { navigate } from '../router';
 import { Header } from '../components';
 import { useStore } from '../store';
@@ -129,6 +129,15 @@ export function ChallengeForm({ id }: { id?: string }) {
                     </label>
                   </div>
                 )}
+                {t.kind === 'measure' && (
+                  <div className="measure-fields">
+                    <label className="field">
+                      <span>Unit</span>
+                      <input value={t.unit} placeholder="kg" maxLength={12} onChange={(e) => patchTask(t.id, { unit: e.target.value })} />
+                    </label>
+                    <p className="muted small">Log a number each day, such as your weight. You'll get a chart of how it changes.</p>
+                  </div>
+                )}
               </div>
             ))}
             <button type="button" className="btn small" onClick={() => setTasks((ts) => [...ts, blankDraft()])}>
@@ -178,11 +187,12 @@ export function ChallengeForm({ id }: { id?: string }) {
 const toTasks = (t: Template): Task[] =>
   t.tasks.map((task) => (typeof task === 'string' ? { id: newId(), title: task } : { id: newId(), ...task }));
 
-type TaskKind = 'tick' | 'counter' | 'photo';
+type TaskKind = 'tick' | 'counter' | 'measure' | 'photo';
 
 const KINDS: { kind: TaskKind; label: string }[] = [
   { kind: 'tick', label: '✓ Tick' },
   { kind: 'counter', label: '# Counter' },
+  { kind: 'measure', label: '📈 Measure' },
   { kind: 'photo', label: '📷 Photo' },
 ];
 
@@ -201,7 +211,7 @@ const blankDraft = (): DraftTask => ({ id: newId(), title: '', kind: 'tick', tar
 const toDraft = (t: Task): DraftTask => ({
   id: t.id,
   title: t.title,
-  kind: isCounter(t) ? 'counter' : isPhoto(t) ? 'photo' : 'tick',
+  kind: isCounter(t) ? 'counter' : isMeasure(t) ? 'measure' : isPhoto(t) ? 'photo' : 'tick',
   target: t.target ? String(t.target) : '',
   unit: t.unit ?? '',
   step: t.step ? String(t.step) : '',
@@ -212,6 +222,7 @@ const num = (s: string) => Number(s.replace(',', '.'));
 function fromDraft(d: DraftTask): Task {
   const task: Task = { id: d.id, title: d.title.trim() };
   if (d.kind === 'photo') return { ...task, photo: true };
+  if (d.kind === 'measure') return { ...task, measure: true, ...(d.unit.trim() && { unit: d.unit.trim() }) };
   if (d.kind !== 'counter') return task;
   task.target = num(d.target);
   if (d.unit.trim()) task.unit = d.unit.trim();
